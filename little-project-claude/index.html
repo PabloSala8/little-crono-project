@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Cronómetro Pro</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0f0f13;
+      --surface:   #1a1a24;
+      --border:    #2a2a3a;
+      --accent:    #6c63ff;
+      --accent2:   #ff6584;
+      --text:      #e8e8f0;
+      --muted:     #6b6b85;
+      --success:   #43e97b;
+      --danger:    #f64747;
+      --warn:      #f7b731;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 48px 16px 80px;
+    }
+
+    h1 {
+      font-size: 1rem;
+      letter-spacing: .25em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 40px;
+    }
+
+    /* ── Display ── */
+    .display-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 40px 56px;
+      text-align: center;
+      box-shadow: 0 8px 40px rgba(0,0,0,.45);
+    }
+
+    #display {
+      font-size: clamp(3.5rem, 12vw, 6.5rem);
+      font-variant-numeric: tabular-nums;
+      font-weight: 700;
+      letter-spacing: .04em;
+      color: var(--accent);
+      line-height: 1;
+    }
+
+    #display .tenths {
+      font-size: .6em;
+      opacity: .8;
+      color: var(--accent2);
+    }
+
+    /* ── Buttons ── */
+    .controls {
+      display: flex;
+      gap: 12px;
+      margin-top: 32px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    button {
+      cursor: pointer;
+      border: none;
+      border-radius: 50px;
+      padding: 14px 32px;
+      font-size: .95rem;
+      font-weight: 600;
+      letter-spacing: .05em;
+      transition: transform .12s, box-shadow .12s, opacity .12s;
+    }
+    button:active { transform: scale(.95); }
+    button:disabled { opacity: .35; cursor: not-allowed; }
+
+    #btn-start {
+      background: linear-gradient(135deg, var(--accent), #9b59b6);
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(108,99,255,.4);
+    }
+    #btn-start:hover:not(:disabled) { box-shadow: 0 6px 28px rgba(108,99,255,.65); transform: translateY(-2px); }
+
+    #btn-stop {
+      background: linear-gradient(135deg, var(--danger), #c0392b);
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(246,71,71,.35);
+    }
+    #btn-stop:hover:not(:disabled) { box-shadow: 0 6px 28px rgba(246,71,71,.6); transform: translateY(-2px); }
+
+    #btn-reset {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    #btn-reset:hover:not(:disabled) { background: var(--border); transform: translateY(-2px); }
+
+    #btn-lap {
+      background: linear-gradient(135deg, var(--success), #1abc9c);
+      color: #0f0f13;
+      box-shadow: 0 4px 20px rgba(67,233,123,.25);
+    }
+    #btn-lap:hover:not(:disabled) { box-shadow: 0 6px 28px rgba(67,233,123,.5); transform: translateY(-2px); }
+
+    /* ── Lap list ── */
+    .lap-section {
+      width: 100%;
+      max-width: 520px;
+      margin-top: 36px;
+    }
+
+    .lap-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: .78rem;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 0 8px 10px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    #lap-list {
+      list-style: none;
+      max-height: 320px;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+
+    #lap-list li {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 8px;
+      border-bottom: 1px solid var(--border);
+      font-size: .92rem;
+      animation: fadeIn .2s ease;
+      transition: background .15s;
+    }
+    #lap-list li:hover { background: var(--surface); border-radius: 8px; }
+
+    #lap-list li .lap-num { color: var(--muted); font-size: .8rem; }
+    #lap-list li .lap-time { font-variant-numeric: tabular-nums; font-weight: 600; }
+    #lap-list li .lap-delta { font-size: .8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+    #lap-list li.fastest .lap-time { color: var(--success); }
+    #lap-list li.slowest .lap-time { color: var(--danger); }
+
+    @keyframes fadeIn { from { opacity:0; transform: translateY(-6px); } to { opacity:1; transform: none; } }
+
+    /* ── Status badge ── */
+    #status-badge {
+      position: fixed;
+      bottom: 18px;
+      right: 18px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 50px;
+      padding: 7px 16px;
+      font-size: .75rem;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    #status-badge .dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--muted);
+    }
+    #status-badge.online .dot { background: var(--success); box-shadow: 0 0 6px var(--success); }
+  </style>
+</head>
+<body>
+
+  <h1>Cronómetro Pro</h1>
+
+  <div class="display-wrap">
+    <div id="display">
+      <span id="mm">00</span>:<span id="ss">00</span>.<span id="tenths" class="tenths">0</span>
+    </div>
+
+    <div class="controls">
+      <button id="btn-start">Start</button>
+      <button id="btn-stop"  disabled>Stop</button>
+      <button id="btn-reset" disabled>Reset</button>
+      <button id="btn-lap"   disabled>Lap</button>
+    </div>
+  </div>
+
+  <div class="lap-section">
+    <div class="lap-header" id="lap-header" style="display:none">
+      <span>Vuelta</span>
+      <span>Parcial</span>
+      <span>+ Δ anterior</span>
+    </div>
+    <ul id="lap-list"></ul>
+  </div>
+
+  <!-- Backend status badge -->
+  <div id="status-badge">
+    <span class="dot"></span>
+    <span id="status-text">Verificando…</span>
+  </div>
+
+  <script>
+    // ── Stopwatch logic ──────────────────────────────────────────
+    let startTime   = 0;
+    let elapsed     = 0;
+    let rafId       = null;
+    let running     = false;
+    let laps        = [];
+    let lapStart    = 0;
+
+    const mmEl      = document.getElementById('mm');
+    const ssEl      = document.getElementById('ss');
+    const tenthsEl  = document.getElementById('tenths');
+    const list  = document.getElementById('lap-list');
+    const header = document.getElementById('lap-header');
+
+    const btnStart = document.getElementById('btn-start');
+    const btnStop  = document.getElementById('btn-stop');
+    const btnReset = document.getElementById('btn-reset');
+    const btnLap   = document.getElementById('btn-lap');
+
+    function pad(n, len=2) { return String(n).padStart(len, '0'); }
+
+    function format(ms) {
+      const total  = Math.floor(ms);            // entero, sin decimales flotantes
+      const m      = Math.floor(total / 60000);
+      const s      = Math.floor((total % 60000) / 1000);
+      const tenths = Math.floor((total % 1000) / 100);
+      return { m, s, tenths };
+    }
+
+    function render(ms) {
+      const { m, s, tenths } = format(ms);
+      mmEl.textContent     = pad(m);
+      ssEl.textContent     = pad(s);
+      tenthsEl.textContent = tenths;
+    }
+
+    function tick() {
+      elapsed = performance.now() - startTime;
+      render(elapsed);
+      rafId = requestAnimationFrame(tick);
+    }
+
+    function setButtons(state) {
+      // state: 'idle' | 'running' | 'stopped'
+      btnStart.disabled = state === 'running';
+      btnStop.disabled  = state !== 'running';
+      btnReset.disabled = state === 'idle';
+      btnLap.disabled   = state !== 'running';
+    }
+
+    btnStart.addEventListener('click', () => {
+      startTime = performance.now() - elapsed;
+      if (laps.length === 0) lapStart = elapsed;
+      running = true;
+      rafId = requestAnimationFrame(tick);
+      setButtons('running');
+    });
+
+    btnStop.addEventListener('click', () => {
+      cancelAnimationFrame(rafId);
+      running = false;
+      setButtons('stopped');
+    });
+
+    btnReset.addEventListener('click', () => {
+      cancelAnimationFrame(rafId);
+      running  = false;
+      elapsed  = 0;
+      laps     = [];
+      lapStart = 0;
+      render(0);
+      list.innerHTML = '';
+      header.style.display = 'none';
+      setButtons('idle');
+    });
+
+    btnLap.addEventListener('click', () => {
+      const lapTime  = elapsed - lapStart;
+      const prev     = laps.length ? laps[laps.length - 1].lapTime : null;
+      const delta    = prev !== null ? lapTime - prev : null;
+      laps.push({ total: elapsed, lapTime, delta });
+      lapStart = elapsed;
+      renderLaps();
+    });
+
+    function formatTime(ms) {
+      const { m, s, tenths } = format(ms);
+      return `${pad(m)}:${pad(s)}.${tenths}`;
+    }
+
+    function renderLaps() {
+      if (!laps.length) return;
+      header.style.display = 'flex';
+
+      // Find fastest / slowest (only when ≥ 2 laps)
+      const times = laps.map(l => l.lapTime);
+      const minT  = Math.min(...times);
+      const maxT  = Math.max(...times);
+
+      list.innerHTML = '';
+      // Show newest first
+      [...laps].reverse().forEach((lap, ri) => {
+        const i   = laps.length - ri;         // real index (1-based)
+        const li  = document.createElement('li');
+
+        const isFastest = laps.length >= 2 && lap.lapTime === minT;
+        const isSlowest = laps.length >= 2 && lap.lapTime === maxT;
+        if (isFastest) li.classList.add('fastest');
+        if (isSlowest) li.classList.add('slowest');
+
+        const deltaStr = lap.delta !== null
+          ? (lap.delta >= 0 ? '+' : '') + formatTime(Math.abs(lap.delta))
+          : '—';
+
+        li.innerHTML = `
+          <span class="lap-num">Vuelta ${i}</span>
+          <span class="lap-time">${formatTime(lap.lapTime)}</span>
+          <span class="lap-delta">${deltaStr}</span>
+        `;
+        list.appendChild(li);
+      });
+    }
+
+    // ── Backend status check ─────────────────────────────────────
+    const badge      = document.getElementById('status-badge');
+    const statusText = document.getElementById('status-text');
+
+    async function checkStatus() {
+      try {
+        const res  = await fetch('/api/status');
+        const data = await res.json();
+        if (data.status === 'online') {
+          badge.classList.add('online');
+          statusText.textContent = 'Backend online';
+        } else {
+          statusText.textContent = 'Backend: ' + data.status;
+        }
+      } catch {
+        statusText.textContent = 'Backend offline';
+      }
+    }
+
+    checkStatus();
+  </script>
+</body>
+</html>
